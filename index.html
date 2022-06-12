@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title></title>
+    <meta name="description" content="" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="css/style.css" />
+
+    <!-- Install Leaflet-->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.8.0/dist/leaflet.css"
+      integrity="sha512-hoalWLoI8r4UszCkZ5kL8vayOGVae1oxXe/2A4AO6J9+580uKHDO3JdHb7NzwwzK5xr/Fs0W40kiNHxM9vyTtQ=="
+      crossorigin=""
+    />
+
+    <script
+      src="https://unpkg.com/leaflet@1.8.0/dist/leaflet.js"
+      integrity="sha512-BB3hKbKWOc9Ez/TAwyWxNXeoV9c1v6FIeYiBieIWkpLjauysF18NzgR1MBNBXf8/KABdlkX68nAhlwcDFLGPCQ=="
+      crossorigin=""
+    ></script>
+
+    <!-- Install Jquery-->
+    <script
+      src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"
+      integrity="sha512-894YE6QWD5I59HgZOGReFYm4dnWc1Qt5NtvYSaNcOP+u1T9qYdvdihz0PPSiiqn/+/3e7Jo4EaG7TubfWGUrMQ=="
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
+    ></script>
+
+    <!-- Install Bootstrap -->
+    <link
+      rel="stylesheet"
+      href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
+    />
+
+    <!-- Install Leaflet GeoServer Request-->
+    <script src="lib/L.Geoserver.js"></script>
+  </head>
+
+  <body>
+    <nav class="navbar navbar-custom">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="#">Honiara Digital Twin</a>
+        <a class="navbar-project" href="#">Adv.SIS | s3725017</a>
+      </div>
+    </nav>
+
+    <div id="map">
+      <div class="map-coordinate">
+        <div class="coordinate"></div>
+      </div>
+    </div>
+  </body>
+
+  <script>
+    var map = L.map("map").setView([-9.44556, 159.9729], 13);
+    // Baselayer
+    var Esri_Canvas = L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+      {
+        attribution: "Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ",
+      }
+    ).addTo(map);
+    var osm = L.tileLayer(
+      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      {
+        attribution:
+          "&copy; <a href='https://openstreetmap.org/copyright'> Openstreet map </a> contributors",
+      }
+    );
+
+    var World_Imagery = L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      {
+        attribution:
+          "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
+      }
+    );
+
+    var ShadedRelief = L.tileLayer(
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Shaded_Relief/MapServer/tile/{z}/{y}/{x}",
+      {
+        attribution: "Tiles &copy; Esri &mdash; Source: Esri",
+      }
+    );
+
+    // Add baselayers to dictionary to be used in base layer selection control
+    var baseLayers = {
+      "ESRI Canvas": Esri_Canvas,
+      "Open Street Map": osm,
+      "World Imagery": World_Imagery,
+      "Shaded Relief": ShadedRelief,
+    };
+
+    //Icons
+    var BusIcon = L.icon({
+      iconUrl: "images/bus-stop-pointer.png",
+      iconSize: [40, 40],
+    });
+
+    //WMS Requests
+    var Bridges = L.Geoserver.wms("http://localhost:8080/geoserver/wms", {
+      layers: "HoniaraDT:Bridges",
+    });
+    Bridges.addTo(map);
+
+    var Buildings = L.Geoserver.wms("http://localhost:8080/geoserver/wms", {
+      layers: "HoniaraDT:Buildings",
+      fillOpacity: 0.2,
+    });
+    Buildings.addTo(map);
+
+    //WFS Request (type 1)
+
+    var Roads = L.Geoserver.wfs("http://localhost:8080/geoserver/wfs", {
+      layers: "HoniaraDT:Roads",
+      style: {
+        color: "grey",
+        weight: 0.5,
+      },
+    });
+    Roads.addTo(map);
+
+    // WFS Request (type 2)
+    $.ajax("http://localhost:8080/geoserver/wfs", {
+      type: "GET",
+      data: {
+        service: "WFS",
+        version: "1.1.0",
+        request: "GetFeature",
+        typename: "HoniaraDT:BusStops",
+        srsname: "EPSG:4326",
+        outputFormat: "text/javascript",
+      },
+      dataType: "jsonp",
+      jsonpCallback: "callback:handleJson",
+      jsonp: "format_options",
+    });
+
+    //Geojson style file
+    var myStyle = {
+      "color": "red",
+    };
+
+    // the ajax callback function
+    function handleJson(data) {
+      selectedArea = L.geoJson(data, {
+        style: myStyle,
+        onEachFeature: function (feature, layer) {
+          layer.bindPopup(`Name: ${feature.properties.name}`);
+          layer.setIcon(BusIcon);
+        },
+      }).addTo(map);
+      map.fitBounds(selectedArea.getBounds());
+    }
+
+    //add to Layer Group
+    var GeoLayers = {
+      "Bridges": Bridges,
+      "Roads": Roads,
+      "Buildings": Buildings,
+    };
+
+    //Display coordinates
+    map.on("mousemove", function (e) {
+      $(".coordinate").html(
+        `Lat: ${e.latlng.lat.toFixed(3)} Lng: ${e.latlng.lng.toFixed(3)}`
+      );
+    });
+
+    // Scale bar
+    L.control
+      .scale({
+        position: "bottomleft",
+      })
+      .addTo(map);
+    //Layer Controls
+    L.control.layers(baseLayers, GeoLayers).addTo(map);
+
+    //Legend
+
+    var layerLegend = L.Geoserver.legend(
+      "http://localhost:8080/geoserver/wms",
+      {
+        layers: "HoniaraDT:Buildings",
+      }
+    );
+
+    layerLegend.addTo(map);
+  </script>
+</html>
